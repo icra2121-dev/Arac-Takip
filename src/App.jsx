@@ -368,15 +368,20 @@ function Dashboard({user,setUser}){
       try{const {data,error}=await supabase.from(table).select("*").order(order,{ascending:asc});
       if(error)console.error(table,error.message);return data||[];}catch(e){console.error(table,e);return [];}
     };
-    const v=await fetchOne("vehicles");setVehicles(v);
-    const d=await fetchOne("drivers");setDrivers(d);
-    const s=await fetchOne("staff");setStaff(s);
-    const u=await fetchOne("units");setUnits(u);
-    const r=await fetchOne("requests","created_at",false);setRequests(r);
-    const ml=await fetchOne("mission_logs","created_at",false);setMLogs(ml);
-    const n=await fetchOne("notifications","created_at",false);setNotifs(n);
-    const ar=await fetchOne("arizalar","created_at",false);setArizalar(ar);
-    const al=await fetchOne("audit_logs","created_at",false);setAuditLogs(al);
+    // Tüm tabloları paralel çek - çok daha hızlı
+    const [v,d,s,u,r,ml,n,ar,al]=await Promise.all([
+      fetchOne("vehicles"),
+      fetchOne("drivers"),
+      fetchOne("staff"),
+      fetchOne("units"),
+      fetchOne("requests","created_at",false),
+      fetchOne("mission_logs","created_at",false),
+      fetchOne("notifications","created_at",false),
+      fetchOne("arizalar","created_at",false),
+      fetchOne("audit_logs","created_at",false),
+    ]);
+    setVehicles(v);setDrivers(d);setStaff(s);setUnits(u);setRequests(r);
+    setMLogs(ml);setNotifs(n);setArizalar(ar);setAuditLogs(al);
     setLoading(false);
   },[]);
 
