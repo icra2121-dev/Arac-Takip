@@ -95,9 +95,8 @@ function MapView({vehicles}){
 }
 
 // ── Yakıt ─────────────────────────────────────────────────────────────────────
-function FuelTab({vehicles}){
+function FuelTab({vehicles,showForm,setShowForm}){
   const [kayitlar,setKayitlar]=useState([]);
-  const [showForm,setShowForm]=useState(false);
   const [filPlaka,setFilPlaka]=useState("");
   const [form,setForm]=useState({plaka:"",lt:"",birim_fiyat:"",fatura_no:"",tarih:"",firma:"",toplam_tutar:""});
   const [loading,setLoading]=useState(false);
@@ -332,10 +331,10 @@ function ReportsTab({vehicles,drivers,staff,logs}){
 
     {chartData.length>0&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:18}}>
       <Card><CardH title="KM Dağılımı"/>
-        <div style={{padding:13,height:220}}><ResponsiveContainer width="100%" height="100%"><BarChart data={chartData}><CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/><XAxis dataKey="name" tick={{fontSize:9}}/><YAxis tick={{fontSize:9}}/><Tooltip formatter={v=>[`${v} km`,"KM"]}/><Bar dataKey="km" fill="#3b82f6" radius={[3,3,0,0]}/></BarChart></ResponsiveContainer></div>
+        <div style={{padding:13,height:220,minWidth:0}}><ResponsiveContainer width="100%" height="100%"><BarChart data={chartData}><CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/><XAxis dataKey="name" tick={{fontSize:9}}/><YAxis tick={{fontSize:9}}/><Tooltip formatter={v=>[`${v} km`,"KM"]}/><Bar dataKey="km" fill="#3b82f6" radius={[3,3,0,0]}/></BarChart></ResponsiveContainer></div>
       </Card>
       <Card><CardH title="Maliyet Dağılımı (₺)"/>
-        <div style={{padding:13,height:220}}><ResponsiveContainer width="100%" height="100%"><BarChart data={chartData}><CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/><XAxis dataKey="name" tick={{fontSize:9}}/><YAxis tick={{fontSize:9}}/><Tooltip formatter={v=>[`₺${v}`,"Maliyet"]}/><Bar dataKey="tl" fill="#ef4444" radius={[3,3,0,0]}/></BarChart></ResponsiveContainer></div>
+        <div style={{padding:13,height:220,minWidth:0}}><ResponsiveContainer width="100%" height="100%"><BarChart data={chartData}><CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/><XAxis dataKey="name" tick={{fontSize:9}}/><YAxis tick={{fontSize:9}}/><Tooltip formatter={v=>[`₺${v}`,"Maliyet"]}/><Bar dataKey="tl" fill="#ef4444" radius={[3,3,0,0]}/></BarChart></ResponsiveContainer></div>
       </Card>
     </div>}
 
@@ -480,28 +479,31 @@ function Dashboard({user,setUser}){
   const [reqExp,setReqExp]=useState({});
   const [reqAtama,setReqAtama]=useState({});
   const [reqKm,setReqKm]=useState({});
+  const [showFuelForm,setShowFuelForm]=useState(false);
 
   const isAdmin=user.role==="admin";
   useEffect(()=>{if(!isAdmin)setTab("requests");},[isAdmin]);
 
   const tst=(msg,c="green")=>{setToast({msg,c});setTimeout(()=>setToast(null),4000);};
 
-  // Tarayıcı geri tuşunu engelle
+  // Tarayıcı geri tuşu → dashboard'a dön
   useEffect(()=>{
-    window.history.pushState(null,"",window.location.href);
-    const handler=()=>{window.history.pushState(null,"",window.location.href);};
+    window.history.pushState({tab:"dashboard"},"",window.location.href);
+    const handler=(e)=>{
+      setTab("dashboard");
+      window.history.pushState({tab:"dashboard"},"",window.location.href);
+    };
     window.addEventListener("popstate",handler);
     return()=>window.removeEventListener("popstate",handler);
   },[]);
 
 
-  const load=useCallback(async()=>{
-    setLoading(true);
+  const fetchData=useCallback(async(showSpinner=false)=>{
+    if(showSpinner)setLoading(true);
     const fetchOne=async(table,order="id",asc=true)=>{
-      try{const {data,error}=await supabase.from(table).select("*").order(order,{ascending:asc});
-      if(error)console.error(table,error.message);return data||[];}catch(e){console.error(table,e);return [];}
+      try{const {data}=await supabase.from(table).select("*").order(order,{ascending:asc});
+      return data||[];}catch(e){return [];}
     };
-    // Tüm tabloları paralel çek - çok daha hızlı
     const [v,d,s,u,r,ml,n,ar,al]=await Promise.all([
       fetchOne("vehicles"),
       fetchOne("drivers"),
@@ -515,16 +517,20 @@ function Dashboard({user,setUser}){
     ]);
     setVehicles(v);setDrivers(d);setStaff(s);setUnits(u);setRequests(r);
     setMLogs(ml);setNotifs(n);setArizalar(ar);setAuditLogs(al);
-    setLoading(false);
+    if(showSpinner)setLoading(false);
   },[]);
 
-  useEffect(()=>{load();},[load]);
+  // load() — işlem sonrası manuel yenileme (spinner gösterir)
+  const load=useCallback(()=>fetchData(true),[fetchData]);
 
-  // Arka planda otomatik yenileme (30 saniyede bir)
+  // İlk yükleme
+  useEffect(()=>{fetchData(true);},[fetchData]);
+
+  // Arka planda sessiz yenileme (30 saniyede bir) — açık formları kapatmaz
   useEffect(()=>{
-    const iv=setInterval(()=>{load();},30000);
+    const iv=setInterval(()=>fetchData(false),30000);
     return()=>clearInterval(iv);
-  },[load]);
+  },[fetchData]);
 
   // Realtime (Paket D)
   useEffect(()=>{
@@ -548,16 +554,16 @@ function Dashboard({user,setUser}){
     setFVeh({plaka:"",marka:"",yil:"",km:""});setShowVeh(false);load();
     tst(`✅ ${fVeh.plaka} eklendi`);
   };
-  const delVeh=async(id,p)=>{if(!window.confirm("Araç silinsin mi?"))return;await supabase.from("vehicles").delete().eq("id",id);await audit(user.username,"Araç Silindi",p);load();};
+  const delVeh=async(id,p)=>{if(!isAdmin)return;if(!window.confirm("Araç silinsin mi?"))return;await supabase.from("vehicles").delete().eq("id",id);await audit(user.username,"Araç Silindi",p);load();};
 
   const addDrv=async()=>{if(!fDrv.ad)return;await supabase.from("drivers").insert({...fDrv,durum:"Müsait",arac:null});await audit(user.username,"Şoför Eklendi",fDrv.ad);setFDrv({ad:"",telefon:""});setShowDrv(false);load();};
-  const delDrv=async(id,a)=>{if(!window.confirm("Şoför silinsin mi?"))return;await supabase.from("drivers").delete().eq("id",id);await audit(user.username,"Şoför Silindi",a);load();};
+  const delDrv=async(id,a)=>{if(!isAdmin)return;if(!window.confirm("Şoför silinsin mi?"))return;await supabase.from("drivers").delete().eq("id",id);await audit(user.username,"Şoför Silindi",a);load();};
 
   const addStf=async()=>{if(!fStf.ad)return;await supabase.from("staff").insert(fStf);setFStf({ad:"",birim:"",telefon:"",unvan:""});setShowStf(false);load();};
-  const delStf=async(id,a)=>{if(!window.confirm("Personel silinsin mi?"))return;await supabase.from("staff").delete().eq("id",id);await audit(user.username,"Personel Silindi",a);load();};
+  const delStf=async(id,a)=>{if(!isAdmin)return;if(!window.confirm("Personel silinsin mi?"))return;await supabase.from("staff").delete().eq("id",id);await audit(user.username,"Personel Silindi",a);load();};
 
   const addUnit=async()=>{if(!fUnit.ad)return;await supabase.from("units").insert(fUnit);setFUnit({ad:""});setShowUnit(false);load();};
-  const delUnit=async(id,a)=>{if(!window.confirm("Birim silinsin mi?"))return;await supabase.from("units").delete().eq("id",id);await audit(user.username,"Birim Silindi",a);load();};
+  const delUnit=async(id,a)=>{if(!isAdmin)return;if(!window.confirm("Birim silinsin mi?"))return;await supabase.from("units").delete().eq("id",id);await audit(user.username,"Birim Silindi",a);load();};
 
   const addReq=async()=>{
     if(!fReq.talep||!fReq.talep_eden){tst("Talep konusu ve talep eden zorunludur","yellow");return;}
@@ -582,7 +588,7 @@ function Dashboard({user,setUser}){
     const {data:inserted,error}=await supabase.from("requests").insert(payload).select();
     if(error){
       tst("Kayıt hatası: "+error.message,"red");
-      console.error("INSERT ERROR:",JSON.stringify(error,null,2));
+      );
       return;
     }
     await audit(user.username,"Talep Oluşturuldu",fReq.talep);
@@ -595,7 +601,7 @@ function Dashboard({user,setUser}){
     setRqBirim("");setRqStaff([]);setShowReq(false);load();
     tst("✅ Talep oluşturuldu");
   };
-  const delReq=async(id,t)=>{if(!window.confirm("Talep silinsin mi?"))return;await supabase.from("requests").delete().eq("id",id);await audit(user.username,"Talep Silindi",t);load();};
+  const delReq=async(id,t)=>{if(!isAdmin)return;if(!window.confirm("Talep silinsin mi?"))return;await supabase.from("requests").delete().eq("id",id);await audit(user.username,"Talep Silindi",t);load();};
 
   const openApp=req=>{setSelReq(req);setFApp({arac:"",sofor:""});setShowApp(true);};
   const confirmApp=async()=>{
@@ -738,14 +744,14 @@ function Dashboard({user,setUser}){
               </div>
             ))}
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14,marginBottom:16}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14,minWidth:0,marginBottom:16}}>
             <Card><CardH title="Araç Dağılımı"/>
-              <div style={{padding:13,height:185,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <div style={{padding:13,height:185,minWidth:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
                 {vehicles.length===0?<Empty icon="🚗" text="Veri yok"/>:<ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={[{name:"Müsait",value:ST.avail},{name:"Görevde",value:ST.duty},{name:"Bakımda",value:ST.maint}].filter(d=>d.value>0)} cx="50%" cy="50%" outerRadius={65} dataKey="value" label={({name,value})=>`${name}:${value}`} labelLine={false} fontSize={10}>{[0,1,2].map(i=><Cell key={i} fill={C[i]}/>)}</Pie><Tooltip/></PieChart></ResponsiveContainer>}
               </div>
             </Card>
             <Card><CardH title="Talep Dağılımı"/>
-              <div style={{padding:13,height:185,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <div style={{padding:13,height:185,minWidth:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
                 {requests.length===0?<Empty icon="📋" text="Veri yok"/>:<ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={[{name:"Beklemede",value:ST.pendReq},{name:"Onaylandı",value:ST.appReq},{name:"Reddedildi",value:(isAdmin?requests:requests.filter(r=>r.talep_eden===user.username)).filter(r=>r.durum==="Reddedildi").length}].filter(d=>d.value>0)} cx="50%" cy="50%" outerRadius={65} dataKey="value" label={({name,value})=>`${name}:${value}`} labelLine={false} fontSize={10}>{[0,1,2].map(i=><Cell key={i} fill={C[i]}/>)}</Pie><Tooltip/></PieChart></ResponsiveContainer>}
               </div>
             </Card>
@@ -1073,7 +1079,7 @@ function Dashboard({user,setUser}){
 
         {/* GÖREVLER */}
 
-        {tab==="fuel"&&<FuelTab vehicles={vehicles}/>}
+        {tab==="fuel"&&<FuelTab vehicles={vehicles} showForm={showFuelForm} setShowForm={setShowFuelForm}/>}
         {tab==="reports"&&<ReportsTab vehicles={vehicles} drivers={drivers} staff={staff} logs={mLogs}/>}
         {tab==="map"&&<MapView vehicles={vehicles}/>}
 
@@ -1139,7 +1145,7 @@ function Dashboard({user,setUser}){
     </Modal>}
 
     {showReq&&<Modal title="Araç Talebi Oluştur" onClose={()=>setShowReq(false)} wide>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,minWidth:0}}>
         <div>
           <SecT>Talep Bilgileri</SecT>
           {(()=>{
