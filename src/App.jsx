@@ -95,162 +95,6 @@ function MapView({vehicles}){
 }
 
 // ── Yakıt ─────────────────────────────────────────────────────────────────────
-function FuelTab({vehicles,showForm,setShowForm}){
-  const [kayitlar,setKayitlar]=useState([]);
-  const [filPlaka,setFilPlaka]=useState("");
-  const [form,setForm]=useState({plaka:"",lt:"",birim_fiyat:"",fatura_no:"",tarih:"",firma:"",toplam_tutar:""});
-  const [loading,setLoading]=useState(false);
-
-  useEffect(()=>{fetchKayitlar();},[]);
-
-  const fetchKayitlar=async()=>{
-    const {data}=await supabase.from("yakit_kayitlari").select("*").order("tarih",{ascending:false});
-    if(data)setKayitlar(data);
-  };
-
-  const handleLtOrFiyat=(field,val)=>{
-    const updated={...form,[field]:val};
-    const lt=parseFloat(field==="lt"?val:updated.lt)||0;
-    const fiyat=parseFloat(field==="birim_fiyat"?val:updated.birim_fiyat)||0;
-    updated.toplam_tutar=lt&&fiyat?(lt*fiyat).toFixed(2):"";
-    setForm(updated);
-  };
-
-  const save=async()=>{
-    if(!form.plaka||!form.lt||!form.birim_fiyat||!form.tarih){alert("Plaka, litre, birim fiyat ve tarih zorunludur.");return;}
-    setLoading(true);
-    const lt=parseFloat(form.lt)||0;
-    const fiyat=parseFloat(form.birim_fiyat)||0;
-    const toplam=(lt*fiyat).toFixed(2);
-    const {error}=await supabase.from("yakit_kayitlari").insert({
-      plaka:form.plaka,lt:String(lt),birim_fiyat:String(fiyat),
-      fatura_no:form.fatura_no||null,tarih:form.tarih,
-      firma:form.firma||null,toplam_tutar:toplam
-    });
-    if(error){alert("Hata: "+error.message);setLoading(false);return;}
-    setForm({plaka:"",lt:"",birim_fiyat:"",fatura_no:"",tarih:"",firma:"",toplam_tutar:""});
-    setShowForm(false);setLoading(false);fetchKayitlar();
-  };
-
-  const del=async(id)=>{if(!window.confirm("Kayıt silinsin mi?"))return;await supabase.from("yakit_kayitlari").delete().eq("id",id);fetchKayitlar();};
-
-  const filtered=filPlaka?kayitlar.filter(k=>k.plaka===filPlaka):kayitlar;
-  const toplamTutar=filtered.reduce((a,k)=>a+(parseFloat(k.toplam_tutar)||0),0);
-  const toplamLt=filtered.reduce((a,k)=>a+(parseFloat(k.lt)||0),0);
-
-  const inpS={width:"100%",padding:"9px 12px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"};
-  const lbS={display:"block",fontSize:10,fontWeight:700,color:"#64748b",marginBottom:4,textTransform:"uppercase"};
-
-  return <div>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-      <h2 style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:20,color:"#0f172a"}}>⛽ Yakıt Kayıtları</h2>
-      <div style={{display:"flex",gap:8,alignItems:"center"}}>
-        <select value={filPlaka} onChange={e=>setFilPlaka(e.target.value)}
-          style={{padding:"8px 12px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:12,fontFamily:"inherit",background:"#fff",outline:"none"}}>
-          <option value="">Tüm Araçlar</option>
-          {vehicles.map(v=><option key={v.id} value={v.plaka}>{v.plaka}</option>)}
-        </select>
-        <button onClick={()=>setShowForm(!showForm)}
-          style={{padding:"9px 18px",borderRadius:9,background:"#0f172a",color:"#fff",border:"none",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:"inherit"}}>
-          + Yakıt Ekle
-        </button>
-      </div>
-    </div>
-
-    {/* Özet kartlar */}
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12,marginBottom:18}}>
-      {[{l:"Toplam Kayıt",v:filtered.length,i:"📋",c:"#3b82f6"},
-        {l:"Toplam Litre",v:`${toplamLt.toFixed(1)} lt`,i:"⛽",c:"#f59e0b"},
-        {l:"Toplam Tutar",v:`₺${toplamTutar.toLocaleString("tr-TR",{minimumFractionDigits:2})}`,i:"💰",c:"#ef4444"}
-      ].map((s,i)=><div key={i} style={{background:"#fff",borderRadius:12,padding:16,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
-        <div style={{fontSize:18,marginBottom:4}}>{s.i}</div>
-        <div style={{fontSize:18,fontWeight:800,fontFamily:"'Syne',sans-serif",color:s.c}}>{s.v}</div>
-        <div style={{fontSize:10,color:"#94a3b8",marginTop:2}}>{s.l}</div>
-      </div>)}
-    </div>
-
-    {/* Form */}
-    {showForm&&<div style={{background:"#fff",borderRadius:14,padding:20,boxShadow:"0 2px 8px rgba(0,0,0,0.08)",marginBottom:18,border:"1.5px solid #e2e8f0"}}>
-      <div style={{fontWeight:700,fontSize:14,color:"#0f172a",marginBottom:14}}>⛽ Yeni Yakıt Kaydı</div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12}}>
-        <div>
-          <label style={lbS}>Plaka</label>
-          <select value={form.plaka} onChange={e=>setForm({...form,plaka:e.target.value})} style={inpS}>
-            <option value="">— Araç Seç —</option>
-            {vehicles.map(v=><option key={v.id} value={v.plaka}>{v.plaka} {v.marka?`- ${v.marka}`:""}</option>)}
-          </select>
-        </div>
-        <div>
-          <label style={lbS}>Litre</label>
-          <input type="number" step="0.1" placeholder="0.0" value={form.lt} onChange={e=>handleLtOrFiyat("lt",e.target.value)} style={inpS}/>
-        </div>
-        <div>
-          <label style={lbS}>Birim Fiyat (₺)</label>
-          <input type="number" step="0.01" placeholder="0.00" value={form.birim_fiyat} onChange={e=>handleLtOrFiyat("birim_fiyat",e.target.value)} style={inpS}/>
-        </div>
-        <div>
-          <label style={lbS}>Fatura Numarası</label>
-          <input type="text" placeholder="Fatura numarası" value={form.fatura_no} onChange={e=>setForm({...form,fatura_no:e.target.value})} style={inpS}/>
-        </div>
-        <div>
-          <label style={lbS}>Tarih</label>
-          <input type="date" value={form.tarih} onChange={e=>setForm({...form,tarih:e.target.value})} style={inpS}/>
-        </div>
-        <div>
-          <label style={lbS}>Firma</label>
-          <input type="text" placeholder="Akaryakıt firması" value={form.firma} onChange={e=>setForm({...form,firma:e.target.value})} style={inpS}/>
-        </div>
-        <div>
-          <label style={lbS}>Toplam Tutar (₺)</label>
-          <input type="number" step="0.01" placeholder="Otomatik" value={form.toplam_tutar} onChange={e=>setForm({...form,toplam_tutar:e.target.value})} style={{...inpS,background:"#f0fdf4",fontWeight:700,color:"#166534"}}/>
-        </div>
-      </div>
-      <div style={{display:"flex",gap:9,marginTop:14}}>
-        <button onClick={()=>setShowForm(false)} style={{padding:"9px 18px",borderRadius:9,background:"#f1f5f9",color:"#334155",border:"none",cursor:"pointer",fontWeight:600,fontFamily:"inherit"}}>İptal</button>
-        <button onClick={save} disabled={loading} style={{padding:"9px 24px",borderRadius:9,background:"#10b981",color:"#fff",border:"none",cursor:"pointer",fontWeight:700,fontFamily:"inherit"}}>
-          {loading?"Kaydediliyor...":"✓ Kaydet"}
-        </button>
-      </div>
-    </div>}
-
-    {/* Tablo */}
-    <div style={{background:"#fff",borderRadius:14,boxShadow:"0 1px 3px rgba(0,0,0,0.06)",overflow:"hidden"}}>
-      {filtered.length===0
-        ?<div style={{padding:"44px 20px",textAlign:"center",color:"#94a3b8"}}>
-          <div style={{fontSize:36,marginBottom:8}}>⛽</div>
-          <div>Henüz yakıt kaydı yok</div>
-        </div>
-        :<table className="dt">
-          <thead>
-            <tr>
-              <th>Plaka</th><th>Litre</th><th>Birim Fiyat</th>
-              <th>Fatura Numarası</th><th>Tarih</th><th>Firma</th><th>Toplam Tutar</th><th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(k=><tr key={k.id}>
-              <td><span style={{fontFamily:"monospace",fontWeight:700,background:"#f1f5f9",padding:"2px 8px",borderRadius:5,fontSize:12}}>{k.plaka}</span></td>
-              <td>{parseFloat(k.lt||0).toFixed(1)} lt</td>
-              <td>₺{parseFloat(k.birim_fiyat||0).toFixed(2)}</td>
-              <td style={{color:"#64748b"}}>{k.fatura_no||"—"}</td>
-              <td style={{color:"#64748b"}}>{k.tarih||"—"}</td>
-              <td style={{color:"#64748b"}}>{k.firma||"—"}</td>
-              <td><span style={{fontWeight:700,color:"#ef4444"}}>₺{parseFloat(k.toplam_tutar||0).toLocaleString("tr-TR",{minimumFractionDigits:2})}</span></td>
-              <td><button className="ab" style={{background:"#fee2e2",color:"#991b1b"}} onClick={()=>del(k.id)}>🗑</button></td>
-            </tr>)}
-            <tr style={{background:"#f8fafc",fontWeight:700}}>
-              <td colSpan={1}>TOPLAM</td>
-              <td>{toplamLt.toFixed(1)} lt</td>
-              <td colSpan={4}></td>
-              <td style={{color:"#ef4444"}}>₺{toplamTutar.toLocaleString("tr-TR",{minimumFractionDigits:2})}</td>
-              <td></td>
-            </tr>
-          </tbody>
-        </table>
-      }
-    </div>
-  </div>;
-}
 
 // ── Raporlar ──────────────────────────────────────────────────────────────────
 function ReportsTab({vehicles,drivers,staff,logs}){
@@ -480,6 +324,10 @@ function Dashboard({user,setUser}){
   const [reqAtama,setReqAtama]=useState({});
   const [reqKm,setReqKm]=useState({});
   const [showFuelForm,setShowFuelForm]=useState(false);
+  const [fuelKayitlar,setFuelKayitlar]=useState([]);
+  const [fuelFilPlaka,setFuelFilPlaka]=useState("");
+  const [fuelForm,setFuelForm]=useState({plaka:"",lt:"",birim_fiyat:"",fatura_no:"",tarih:"",firma:"",toplam_tutar:""});
+  const [fuelLoading,setFuelLoading]=useState(false);
 
   const isAdmin=user.role==="admin";
   useEffect(()=>{if(!isAdmin)setTab("requests");},[isAdmin]);
@@ -517,6 +365,8 @@ function Dashboard({user,setUser}){
     ]);
     setVehicles(v);setDrivers(d);setStaff(s);setUnits(u);setRequests(r);
     setMLogs(ml);setNotifs(n);setArizalar(ar);setAuditLogs(al);
+    const {data:fk}=await supabase.from("yakit_kayitlari").select("*").order("tarih",{ascending:false});
+    if(fk)setFuelKayitlar(fk);
     if(showSpinner)setLoading(false);
   },[]);
 
@@ -1079,7 +929,100 @@ function Dashboard({user,setUser}){
 
         {/* GÖREVLER */}
 
-        {tab==="fuel"&&<FuelTab vehicles={vehicles} showForm={showFuelForm} setShowForm={setShowFuelForm}/>}
+        {tab==="fuel"&&(()=>{
+  const filtered=fuelFilPlaka?fuelKayitlar.filter(k=>k.plaka===fuelFilPlaka):fuelKayitlar;
+  const toplamTutar=filtered.reduce((a,k)=>a+(parseFloat(k.toplam_tutar)||0),0);
+  const toplamLt=filtered.reduce((a,k)=>a+(parseFloat(k.lt)||0),0);
+  const inpS={width:"100%",padding:"9px 12px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"};
+  const lbS={display:"block",fontSize:10,fontWeight:700,color:"#64748b",marginBottom:4,textTransform:"uppercase"};
+  const handleLtOrFiyat=(field,val)=>{
+    const updated={...fuelForm,[field]:val};
+    const lt=parseFloat(field==="lt"?val:updated.lt)||0;
+    const fiyat=parseFloat(field==="birim_fiyat"?val:updated.birim_fiyat)||0;
+    updated.toplam_tutar=lt&&fiyat?(lt*fiyat).toFixed(2):"";
+    setFuelForm(updated);
+  };
+  const saveFuel=async()=>{
+    if(!fuelForm.plaka||!fuelForm.lt||!fuelForm.birim_fiyat||!fuelForm.tarih){alert("Plaka, litre, birim fiyat ve tarih zorunludur.");return;}
+    setFuelLoading(true);
+    const lt=parseFloat(fuelForm.lt)||0;
+    const fiyat=parseFloat(fuelForm.birim_fiyat)||0;
+    const toplam=(lt*fiyat).toFixed(2);
+    const {error}=await supabase.from("yakit_kayitlari").insert({plaka:fuelForm.plaka,lt:String(lt),birim_fiyat:String(fiyat),fatura_no:fuelForm.fatura_no||null,tarih:fuelForm.tarih,firma:fuelForm.firma||null,toplam_tutar:toplam});
+    if(error){alert("Hata: "+error.message);setFuelLoading(false);return;}
+    setFuelForm({plaka:"",lt:"",birim_fiyat:"",fatura_no:"",tarih:"",firma:"",toplam_tutar:""});
+    setShowFuelForm(false);setFuelLoading(false);
+    const {data:fk}=await supabase.from("yakit_kayitlari").select("*").order("tarih",{ascending:false});
+    if(fk)setFuelKayitlar(fk);
+  };
+  const delFuel=async(id)=>{
+    if(!window.confirm("Kayıt silinsin mi?"))return;
+    await supabase.from("yakit_kayitlari").delete().eq("id",id);
+    const {data:fk}=await supabase.from("yakit_kayitlari").select("*").order("tarih",{ascending:false});
+    if(fk)setFuelKayitlar(fk);
+  };
+  return <div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+      <h2 style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:20,color:"#0f172a"}}>⛽ Yakıt Kayıtları</h2>
+      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+        <select value={fuelFilPlaka} onChange={e=>setFuelFilPlaka(e.target.value)} style={{padding:"8px 12px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:12,fontFamily:"inherit",background:"#fff",outline:"none"}}>
+          <option value="">Tüm Araçlar</option>
+          {vehicles.map(v=><option key={v.id} value={v.plaka}>{v.plaka}</option>)}
+        </select>
+        <button onClick={()=>setShowFuelForm(!showFuelForm)} style={{padding:"9px 18px",borderRadius:9,background:"#0f172a",color:"#fff",border:"none",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:"inherit"}}>+ Yakıt Ekle</button>
+      </div>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12,marginBottom:18}}>
+      {[{l:"Toplam Kayıt",v:filtered.length,i:"📋",c:"#3b82f6"},{l:"Toplam Litre",v:`${toplamLt.toFixed(1)} lt`,i:"⛽",c:"#f59e0b"},{l:"Toplam Tutar",v:`₺${toplamTutar.toLocaleString("tr-TR",{minimumFractionDigits:2})}`,i:"💰",c:"#ef4444"}].map((s,i)=><div key={i} style={{background:"#fff",borderRadius:12,padding:16,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
+        <div style={{fontSize:18,marginBottom:4}}>{s.i}</div>
+        <div style={{fontSize:18,fontWeight:800,fontFamily:"'Syne',sans-serif",color:s.c}}>{s.v}</div>
+        <div style={{fontSize:10,color:"#94a3b8",marginTop:2}}>{s.l}</div>
+      </div>)}
+    </div>
+    {showFuelForm&&<div style={{background:"#fff",borderRadius:14,padding:20,boxShadow:"0 2px 8px rgba(0,0,0,0.08)",marginBottom:18,border:"1.5px solid #e2e8f0"}}>
+      <div style={{fontWeight:700,fontSize:14,color:"#0f172a",marginBottom:14}}>⛽ Yeni Yakıt Kaydı</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12}}>
+        <div><label style={lbS}>Plaka</label>
+          <select value={fuelForm.plaka} onChange={e=>setFuelForm({...fuelForm,plaka:e.target.value})} style={inpS}>
+            <option value="">— Araç Seç —</option>
+            {vehicles.map(v=><option key={v.id} value={v.plaka}>{v.plaka} {v.marka?`- ${v.marka}`:""}</option>)}
+          </select></div>
+        <div><label style={lbS}>Litre</label><input type="number" step="0.1" placeholder="0.0" value={fuelForm.lt} onChange={e=>handleLtOrFiyat("lt",e.target.value)} style={inpS}/></div>
+        <div><label style={lbS}>Birim Fiyat (₺)</label><input type="number" step="0.01" placeholder="0.00" value={fuelForm.birim_fiyat} onChange={e=>handleLtOrFiyat("birim_fiyat",e.target.value)} style={inpS}/></div>
+        <div><label style={lbS}>Fatura Numarası</label><input type="text" placeholder="Fatura numarası" value={fuelForm.fatura_no} onChange={e=>setFuelForm({...fuelForm,fatura_no:e.target.value})} style={inpS}/></div>
+        <div><label style={lbS}>Tarih</label><input type="date" value={fuelForm.tarih} onChange={e=>setFuelForm({...fuelForm,tarih:e.target.value})} style={inpS}/></div>
+        <div><label style={lbS}>Firma</label><input type="text" placeholder="Akaryakıt firması" value={fuelForm.firma} onChange={e=>setFuelForm({...fuelForm,firma:e.target.value})} style={inpS}/></div>
+        <div><label style={lbS}>Toplam Tutar (₺)</label><input type="number" step="0.01" placeholder="Otomatik" value={fuelForm.toplam_tutar} onChange={e=>setFuelForm({...fuelForm,toplam_tutar:e.target.value})} style={{...inpS,background:"#f0fdf4",fontWeight:700,color:"#166534"}}/></div>
+      </div>
+      <div style={{display:"flex",gap:9,marginTop:14}}>
+        <button onClick={()=>setShowFuelForm(false)} style={{padding:"9px 18px",borderRadius:9,background:"#f1f5f9",color:"#334155",border:"none",cursor:"pointer",fontWeight:600,fontFamily:"inherit"}}>İptal</button>
+        <button onClick={saveFuel} disabled={fuelLoading} style={{padding:"9px 24px",borderRadius:9,background:"#10b981",color:"#fff",border:"none",cursor:"pointer",fontWeight:700,fontFamily:"inherit"}}>{fuelLoading?"Kaydediliyor...":"✓ Kaydet"}</button>
+      </div>
+    </div>}
+    <div style={{background:"#fff",borderRadius:14,boxShadow:"0 1px 3px rgba(0,0,0,0.06)",overflow:"hidden"}}>
+      {filtered.length===0
+        ?<div style={{padding:"44px 20px",textAlign:"center",color:"#94a3b8"}}><div style={{fontSize:36,marginBottom:8}}>⛽</div><div>Henüz yakıt kaydı yok</div></div>
+        :<table className="dt"><thead><tr><th>Plaka</th><th>Litre</th><th>Birim Fiyat</th><th>Fatura Numarası</th><th>Tarih</th><th>Firma</th><th>Toplam Tutar</th><th></th></tr></thead>
+          <tbody>
+            {filtered.map(k=><tr key={k.id}>
+              <td><span style={{fontFamily:"monospace",fontWeight:700,background:"#f1f5f9",padding:"2px 8px",borderRadius:5,fontSize:12}}>{k.plaka}</span></td>
+              <td>{parseFloat(k.lt||0).toFixed(1)} lt</td>
+              <td>₺{parseFloat(k.birim_fiyat||0).toFixed(2)}</td>
+              <td style={{color:"#64748b"}}>{k.fatura_no||"—"}</td>
+              <td style={{color:"#64748b"}}>{k.tarih||"—"}</td>
+              <td style={{color:"#64748b"}}>{k.firma||"—"}</td>
+              <td><span style={{fontWeight:700,color:"#ef4444"}}>₺{parseFloat(k.toplam_tutar||0).toLocaleString("tr-TR",{minimumFractionDigits:2})}</span></td>
+              <td><button className="ab" style={{background:"#fee2e2",color:"#991b1b"}} onClick={()=>delFuel(k.id)}>🗑</button></td>
+            </tr>)}
+            <tr style={{background:"#f8fafc",fontWeight:700}}>
+              <td>TOPLAM</td><td>{toplamLt.toFixed(1)} lt</td><td colSpan={4}></td>
+              <td style={{color:"#ef4444"}}>₺{toplamTutar.toLocaleString("tr-TR",{minimumFractionDigits:2})}</td><td></td>
+            </tr>
+          </tbody>
+        </table>}
+    </div>
+  </div>;
+})()}
         {tab==="reports"&&<ReportsTab vehicles={vehicles} drivers={drivers} staff={staff} logs={mLogs}/>}
         {tab==="map"&&<MapView vehicles={vehicles}/>}
 
