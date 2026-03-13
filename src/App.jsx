@@ -96,26 +96,159 @@ function MapView({vehicles}){
 
 // ── Yakıt ─────────────────────────────────────────────────────────────────────
 function FuelTab({vehicles}){
-  const data=vehicles.map(v=>{const f=calcFuel(v);return{plaka:v.plaka,maliyet:f.toplam,litre:f.litre,mesafe:f.mesafe};});
-  const tot={cost:data.reduce((a,b)=>a+b.maliyet,0),km:data.reduce((a,b)=>a+b.mesafe,0),litre:data.reduce((a,b)=>a+b.litre,0)};
+  const [kayitlar,setKayitlar]=useState([]);
+  const [showForm,setShowForm]=useState(false);
+  const [filPlaka,setFilPlaka]=useState("");
+  const [form,setForm]=useState({plaka:"",lt:"",birim_fiyat:"",fis_no:"",tarih:"",firma:"",toplam_tutar:""});
+  const [loading,setLoading]=useState(false);
+
+  useEffect(()=>{fetchKayitlar();},[]);
+
+  const fetchKayitlar=async()=>{
+    const {data}=await supabase.from("yakit_kayitlari").select("*").order("tarih",{ascending:false});
+    if(data)setKayitlar(data);
+  };
+
+  const handleLtOrFiyat=(field,val)=>{
+    const updated={...form,[field]:val};
+    const lt=parseFloat(field==="lt"?val:updated.lt)||0;
+    const fiyat=parseFloat(field==="birim_fiyat"?val:updated.birim_fiyat)||0;
+    updated.toplam_tutar=lt&&fiyat?(lt*fiyat).toFixed(2):"";
+    setForm(updated);
+  };
+
+  const save=async()=>{
+    if(!form.plaka||!form.lt||!form.birim_fiyat||!form.tarih){alert("Plaka, litre, birim fiyat ve tarih zorunludur.");return;}
+    setLoading(true);
+    const lt=parseFloat(form.lt)||0;
+    const fiyat=parseFloat(form.birim_fiyat)||0;
+    const toplam=(lt*fiyat).toFixed(2);
+    const {error}=await supabase.from("yakit_kayitlari").insert({
+      plaka:form.plaka,lt:String(lt),birim_fiyat:String(fiyat),
+      fis_no:form.fis_no||null,tarih:form.tarih,
+      firma:form.firma||null,toplam_tutar:toplam
+    });
+    if(error){alert("Hata: "+error.message);setLoading(false);return;}
+    setForm({plaka:"",lt:"",birim_fiyat:"",fis_no:"",tarih:"",firma:"",toplam_tutar:""});
+    setShowForm(false);setLoading(false);fetchKayitlar();
+  };
+
+  const del=async(id)=>{if(!window.confirm("Kayıt silinsin mi?"))return;await supabase.from("yakit_kayitlari").delete().eq("id",id);fetchKayitlar();};
+
+  const filtered=filPlaka?kayitlar.filter(k=>k.plaka===filPlaka):kayitlar;
+  const toplamTutar=filtered.reduce((a,k)=>a+(parseFloat(k.toplam_tutar)||0),0);
+  const toplamLt=filtered.reduce((a,k)=>a+(parseFloat(k.lt)||0),0);
+
+  const inpS={width:"100%",padding:"9px 12px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"};
+  const lbS={display:"block",fontSize:10,fontWeight:700,color:"#64748b",marginBottom:4,textTransform:"uppercase"};
+
   return <div>
-    <h2 style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:21,color:"#0f172a",marginBottom:18}}>⛽ Yakıt Tüketim Analizi</h2>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:13,marginBottom:20}}>
-      {[{l:"Toplam Maliyet",v:`₺${tot.cost.toLocaleString("tr-TR")}`,i:"💰",c:"#ef4444"},{l:"Toplam Mesafe",v:`${tot.km.toLocaleString()} km`,i:"🛣️",c:"#3b82f6"},{l:"Toplam Yakıt",v:`${tot.litre.toFixed(1)} lt`,i:"⛽",c:"#f59e0b"},{l:"Ort. ₺/km",v:`₺${tot.km>0?(tot.cost/tot.km).toFixed(2):0}`,i:"📊",c:"#10b981"}].map((s,i)=>(
-        <div key={i} style={{background:"#fff",borderRadius:13,padding:16,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
-          <div style={{fontSize:19,marginBottom:5}}>{s.i}</div>
-          <div style={{fontSize:18,fontWeight:800,fontFamily:"'Syne',sans-serif",color:s.c}}>{s.v}</div>
-          <div style={{fontSize:10,color:"#94a3b8",marginTop:2}}>{s.l}</div>
-        </div>
-      ))}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+      <h2 style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:20,color:"#0f172a"}}>⛽ Yakıt Kayıtları</h2>
+      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+        <select value={filPlaka} onChange={e=>setFilPlaka(e.target.value)}
+          style={{padding:"8px 12px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:12,fontFamily:"inherit",background:"#fff",outline:"none"}}>
+          <option value="">Tüm Araçlar</option>
+          {vehicles.map(v=><option key={v.id} value={v.plaka}>{v.plaka}</option>)}
+        </select>
+        <button onClick={()=>setShowForm(!showForm)}
+          style={{padding:"9px 18px",borderRadius:9,background:"#0f172a",color:"#fff",border:"none",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:"inherit"}}>
+          + Yakıt Ekle
+        </button>
+      </div>
     </div>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-      <Card><CardH title="Maliyet (₺)"/>
-        <div style={{padding:14,height:240}}>{data.length===0?<Empty icon="📊" text="Veri yok"/>:<ResponsiveContainer width="100%" height="100%"><BarChart data={data}><CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/><XAxis dataKey="plaka" tick={{fontSize:10}}/><YAxis tick={{fontSize:10}}/><Tooltip formatter={v=>[`₺${v}`,"Maliyet"]}/><Bar dataKey="maliyet" fill="#ef4444" radius={[4,4,0,0]}/></BarChart></ResponsiveContainer>}</div>
-      </Card>
-      <Card><CardH title="Tüketim (lt)"/>
-        <div style={{padding:14,height:240}}>{data.length===0?<Empty icon="📊" text="Veri yok"/>:<ResponsiveContainer width="100%" height="100%"><BarChart data={data}><CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/><XAxis dataKey="plaka" tick={{fontSize:10}}/><YAxis tick={{fontSize:10}}/><Tooltip formatter={v=>[`${v} lt`,"Tüketim"]}/><Bar dataKey="litre" fill="#f59e0b" radius={[4,4,0,0]}/></BarChart></ResponsiveContainer>}</div>
-      </Card>
+
+    {/* Özet kartlar */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12,marginBottom:18}}>
+      {[{l:"Toplam Kayıt",v:filtered.length,i:"📋",c:"#3b82f6"},
+        {l:"Toplam Litre",v:`${toplamLt.toFixed(1)} lt`,i:"⛽",c:"#f59e0b"},
+        {l:"Toplam Tutar",v:`₺${toplamTutar.toLocaleString("tr-TR",{minimumFractionDigits:2})}`,i:"💰",c:"#ef4444"}
+      ].map((s,i)=><div key={i} style={{background:"#fff",borderRadius:12,padding:16,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
+        <div style={{fontSize:18,marginBottom:4}}>{s.i}</div>
+        <div style={{fontSize:18,fontWeight:800,fontFamily:"'Syne',sans-serif",color:s.c}}>{s.v}</div>
+        <div style={{fontSize:10,color:"#94a3b8",marginTop:2}}>{s.l}</div>
+      </div>)}
+    </div>
+
+    {/* Form */}
+    {showForm&&<div style={{background:"#fff",borderRadius:14,padding:20,boxShadow:"0 2px 8px rgba(0,0,0,0.08)",marginBottom:18,border:"1.5px solid #e2e8f0"}}>
+      <div style={{fontWeight:700,fontSize:14,color:"#0f172a",marginBottom:14}}>⛽ Yeni Yakıt Kaydı</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12}}>
+        <div>
+          <label style={lbS}>Plaka</label>
+          <select value={form.plaka} onChange={e=>setForm({...form,plaka:e.target.value})} style={inpS}>
+            <option value="">— Araç Seç —</option>
+            {vehicles.map(v=><option key={v.id} value={v.plaka}>{v.plaka} {v.marka?`- ${v.marka}`:""}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={lbS}>Litre</label>
+          <input type="number" step="0.1" placeholder="0.0" value={form.lt} onChange={e=>handleLtOrFiyat("lt",e.target.value)} style={inpS}/>
+        </div>
+        <div>
+          <label style={lbS}>Birim Fiyat (₺)</label>
+          <input type="number" step="0.01" placeholder="0.00" value={form.birim_fiyat} onChange={e=>handleLtOrFiyat("birim_fiyat",e.target.value)} style={inpS}/>
+        </div>
+        <div>
+          <label style={lbS}>Fiş No</label>
+          <input type="text" placeholder="Fiş numarası" value={form.fis_no} onChange={e=>setForm({...form,fis_no:e.target.value})} style={inpS}/>
+        </div>
+        <div>
+          <label style={lbS}>Tarih</label>
+          <input type="date" value={form.tarih} onChange={e=>setForm({...form,tarih:e.target.value})} style={inpS}/>
+        </div>
+        <div>
+          <label style={lbS}>Firma</label>
+          <input type="text" placeholder="Akaryakıt firması" value={form.firma} onChange={e=>setForm({...form,firma:e.target.value})} style={inpS}/>
+        </div>
+        <div>
+          <label style={lbS}>Toplam Tutar (₺)</label>
+          <input type="number" step="0.01" placeholder="Otomatik" value={form.toplam_tutar} onChange={e=>setForm({...form,toplam_tutar:e.target.value})} style={{...inpS,background:"#f0fdf4",fontWeight:700,color:"#166534"}}/>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:9,marginTop:14}}>
+        <button onClick={()=>setShowForm(false)} style={{padding:"9px 18px",borderRadius:9,background:"#f1f5f9",color:"#334155",border:"none",cursor:"pointer",fontWeight:600,fontFamily:"inherit"}}>İptal</button>
+        <button onClick={save} disabled={loading} style={{padding:"9px 24px",borderRadius:9,background:"#10b981",color:"#fff",border:"none",cursor:"pointer",fontWeight:700,fontFamily:"inherit"}}>
+          {loading?"Kaydediliyor...":"✓ Kaydet"}
+        </button>
+      </div>
+    </div>}
+
+    {/* Tablo */}
+    <div style={{background:"#fff",borderRadius:14,boxShadow:"0 1px 3px rgba(0,0,0,0.06)",overflow:"hidden"}}>
+      {filtered.length===0
+        ?<div style={{padding:"44px 20px",textAlign:"center",color:"#94a3b8"}}>
+          <div style={{fontSize:36,marginBottom:8}}>⛽</div>
+          <div>Henüz yakıt kaydı yok</div>
+        </div>
+        :<table className="dt">
+          <thead>
+            <tr>
+              <th>Plaka</th><th>Litre</th><th>Birim Fiyat</th>
+              <th>Fiş No</th><th>Tarih</th><th>Firma</th><th>Toplam Tutar</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(k=><tr key={k.id}>
+              <td><span style={{fontFamily:"monospace",fontWeight:700,background:"#f1f5f9",padding:"2px 8px",borderRadius:5,fontSize:12}}>{k.plaka}</span></td>
+              <td>{parseFloat(k.lt||0).toFixed(1)} lt</td>
+              <td>₺{parseFloat(k.birim_fiyat||0).toFixed(2)}</td>
+              <td style={{color:"#64748b"}}>{k.fis_no||"—"}</td>
+              <td style={{color:"#64748b"}}>{k.tarih||"—"}</td>
+              <td style={{color:"#64748b"}}>{k.firma||"—"}</td>
+              <td><span style={{fontWeight:700,color:"#ef4444"}}>₺{parseFloat(k.toplam_tutar||0).toLocaleString("tr-TR",{minimumFractionDigits:2})}</span></td>
+              <td><button className="ab" style={{background:"#fee2e2",color:"#991b1b"}} onClick={()=>del(k.id)}>🗑</button></td>
+            </tr>)}
+            <tr style={{background:"#f8fafc",fontWeight:700}}>
+              <td colSpan={1}>TOPLAM</td>
+              <td>{toplamLt.toFixed(1)} lt</td>
+              <td colSpan={4}></td>
+              <td style={{color:"#ef4444"}}>₺{toplamTutar.toLocaleString("tr-TR",{minimumFractionDigits:2})}</td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      }
     </div>
   </div>;
 }
