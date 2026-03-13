@@ -99,7 +99,7 @@ function FuelTab({vehicles}){
   const [kayitlar,setKayitlar]=useState([]);
   const [showForm,setShowForm]=useState(false);
   const [filPlaka,setFilPlaka]=useState("");
-  const [form,setForm]=useState({plaka:"",lt:"",birim_fiyat:"",fis_no:"",tarih:"",firma:"",toplam_tutar:""});
+  const [form,setForm]=useState({plaka:"",lt:"",birim_fiyat:"",fatura_no:"",tarih:"",firma:"",toplam_tutar:""});
   const [loading,setLoading]=useState(false);
 
   useEffect(()=>{fetchKayitlar();},[]);
@@ -125,11 +125,11 @@ function FuelTab({vehicles}){
     const toplam=(lt*fiyat).toFixed(2);
     const {error}=await supabase.from("yakit_kayitlari").insert({
       plaka:form.plaka,lt:String(lt),birim_fiyat:String(fiyat),
-      fis_no:form.fis_no||null,tarih:form.tarih,
+      fatura_no:form.fatura_no||null,tarih:form.tarih,
       firma:form.firma||null,toplam_tutar:toplam
     });
     if(error){alert("Hata: "+error.message);setLoading(false);return;}
-    setForm({plaka:"",lt:"",birim_fiyat:"",fis_no:"",tarih:"",firma:"",toplam_tutar:""});
+    setForm({plaka:"",lt:"",birim_fiyat:"",fatura_no:"",tarih:"",firma:"",toplam_tutar:""});
     setShowForm(false);setLoading(false);fetchKayitlar();
   };
 
@@ -190,8 +190,8 @@ function FuelTab({vehicles}){
           <input type="number" step="0.01" placeholder="0.00" value={form.birim_fiyat} onChange={e=>handleLtOrFiyat("birim_fiyat",e.target.value)} style={inpS}/>
         </div>
         <div>
-          <label style={lbS}>Fiş Numarası</label>
-          <input type="text" placeholder="Fiş numarası" value={form.fis_no} onChange={e=>setForm({...form,fis_no:e.target.value})} style={inpS}/>
+          <label style={lbS}>Fatura Numarası</label>
+          <input type="text" placeholder="Fatura numarası" value={form.fatura_no} onChange={e=>setForm({...form,fatura_no:e.target.value})} style={inpS}/>
         </div>
         <div>
           <label style={lbS}>Tarih</label>
@@ -225,7 +225,7 @@ function FuelTab({vehicles}){
           <thead>
             <tr>
               <th>Plaka</th><th>Litre</th><th>Birim Fiyat</th>
-              <th>Fiş Numarası</th><th>Tarih</th><th>Firma</th><th>Toplam Tutar</th><th></th>
+              <th>Fatura Numarası</th><th>Tarih</th><th>Firma</th><th>Toplam Tutar</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -233,7 +233,7 @@ function FuelTab({vehicles}){
               <td><span style={{fontFamily:"monospace",fontWeight:700,background:"#f1f5f9",padding:"2px 8px",borderRadius:5,fontSize:12}}>{k.plaka}</span></td>
               <td>{parseFloat(k.lt||0).toFixed(1)} lt</td>
               <td>₺{parseFloat(k.birim_fiyat||0).toFixed(2)}</td>
-              <td style={{color:"#64748b"}}>{k.fis_no||"—"}</td>
+              <td style={{color:"#64748b"}}>{k.fatura_no||"—"}</td>
               <td style={{color:"#64748b"}}>{k.tarih||"—"}</td>
               <td style={{color:"#64748b"}}>{k.firma||"—"}</td>
               <td><span style={{fontWeight:700,color:"#ef4444"}}>₺{parseFloat(k.toplam_tutar||0).toLocaleString("tr-TR",{minimumFractionDigits:2})}</span></td>
