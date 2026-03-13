@@ -365,8 +365,6 @@ function Dashboard({user,setUser}){
     ]);
     setVehicles(v);setDrivers(d);setStaff(s);setUnits(u);setRequests(r);
     setMLogs(ml);setNotifs(n);setArizalar(ar);setAuditLogs(al);
-    const {data:fk}=await supabase.from("yakit_kayitlari").select("*").order("tarih",{ascending:false});
-    if(fk)setFuelKayitlar(fk);
     if(showSpinner)setLoading(false);
   },[]);
 
@@ -376,11 +374,22 @@ function Dashboard({user,setUser}){
   // İlk yükleme
   useEffect(()=>{fetchData(true);},[fetchData]);
 
-  // Arka planda sessiz yenileme (30 saniyede bir) — açık formları kapatmaz
+  // Yakıt kayıtlarını ayrı olarak yükle
+  const fetchFuelKayitlar=useCallback(async()=>{
+    const {data}=await supabase.from("yakit_kayitlari").select("*").order("tarih",{ascending:false});
+    if(data)setFuelKayitlar(data);
+  },[]);
+
+  useEffect(()=>{fetchFuelKayitlar();},[fetchFuelKayitlar]);
+
+  // Arka planda sessiz yenileme — form açıkken yakıt verisini yenileme
   useEffect(()=>{
-    const iv=setInterval(()=>fetchData(false),30000);
+    const iv=setInterval(()=>{
+      fetchData(false);
+      if(!showFuelForm)fetchFuelKayitlar();
+    },30000);
     return()=>clearInterval(iv);
-  },[fetchData]);
+  },[fetchData,fetchFuelKayitlar,showFuelForm]);
 
   // Realtime (Paket D)
   useEffect(()=>{
@@ -952,14 +961,12 @@ function Dashboard({user,setUser}){
     if(error){alert("Hata: "+error.message);setFuelLoading(false);return;}
     setFuelForm({plaka:"",lt:"",birim_fiyat:"",fatura_no:"",tarih:"",firma:"",toplam_tutar:""});
     setShowFuelForm(false);setFuelLoading(false);
-    const {data:fk}=await supabase.from("yakit_kayitlari").select("*").order("tarih",{ascending:false});
-    if(fk)setFuelKayitlar(fk);
+    fetchFuelKayitlar();
   };
   const delFuel=async(id)=>{
     if(!window.confirm("Kayıt silinsin mi?"))return;
     await supabase.from("yakit_kayitlari").delete().eq("id",id);
-    const {data:fk}=await supabase.from("yakit_kayitlari").select("*").order("tarih",{ascending:false});
-    if(fk)setFuelKayitlar(fk);
+    fetchFuelKayitlar();
   };
   return <div>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
