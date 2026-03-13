@@ -387,6 +387,12 @@ function Dashboard({user,setUser}){
 
   useEffect(()=>{load();},[load]);
 
+  // Arka planda otomatik yenileme (30 saniyede bir)
+  useEffect(()=>{
+    const iv=setInterval(()=>{load();},30000);
+    return()=>clearInterval(iv);
+  },[load]);
+
   // Realtime (Paket D)
   useEffect(()=>{
     const ch=supabase.channel("rt")
