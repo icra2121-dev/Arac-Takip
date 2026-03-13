@@ -190,7 +190,7 @@ function FuelTab({vehicles}){
           <input type="number" step="0.01" placeholder="0.00" value={form.birim_fiyat} onChange={e=>handleLtOrFiyat("birim_fiyat",e.target.value)} style={inpS}/>
         </div>
         <div>
-          <label style={lbS}>Fiş No</label>
+          <label style={lbS}>Fiş Numarası</label>
           <input type="text" placeholder="Fiş numarası" value={form.fis_no} onChange={e=>setForm({...form,fis_no:e.target.value})} style={inpS}/>
         </div>
         <div>
@@ -225,7 +225,7 @@ function FuelTab({vehicles}){
           <thead>
             <tr>
               <th>Plaka</th><th>Litre</th><th>Birim Fiyat</th>
-              <th>Fiş No</th><th>Tarih</th><th>Firma</th><th>Toplam Tutar</th><th></th>
+              <th>Fiş Numarası</th><th>Tarih</th><th>Firma</th><th>Toplam Tutar</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -760,7 +760,14 @@ function Dashboard({user,setUser}){
             </Card>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-            <Card><CardH title="Son Talepler" action={<button onClick={()=>setTab("requests")} style={{background:"none",border:"none",color:"#3b82f6",fontSize:12,cursor:"pointer",fontWeight:600}}>Tümü →</button>}/>
+            <Card>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 18px 0"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontWeight:700,fontSize:13,color:"#0f172a"}}>Son Talepler</span>
+                  {ST.pendReq>0&&<span style={{background:"#ef4444",color:"#fff",borderRadius:"50%",width:20,height:20,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800}}>{ST.pendReq}</span>}
+                </div>
+                <button onClick={()=>setTab("requests")} style={{background:"none",border:"none",color:"#3b82f6",fontSize:12,cursor:"pointer",fontWeight:600}}>Tümü →</button>
+              </div>
               {requests.length===0?<Empty icon="📋" text="Talep yok"/>:requests.slice(0,5).map(r=>(
                 <div key={r.id} style={{padding:"9px 18px",borderBottom:"1px solid #f8fafc"}}>
                   <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}><div style={{fontSize:12,fontWeight:600,color:"#0f172a"}}>{r.talep}</div><Badge s={r.durum}/></div>
