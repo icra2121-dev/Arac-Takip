@@ -486,24 +486,22 @@ function Dashboard({user,setUser}){
 
   const tst=(msg,c="green")=>{setToast({msg,c});setTimeout(()=>setToast(null),4000);};
 
-  // Tarayıcı geri tuşu → dashboard'a dön
+  // Tarayıcı geri tuşunu engelle
   useEffect(()=>{
-    window.history.pushState({tab:"dashboard"},"",window.location.href);
-    const handler=(e)=>{
-      setTab("dashboard");
-      window.history.pushState({tab:"dashboard"},"",window.location.href);
-    };
+    window.history.pushState(null,"",window.location.href);
+    const handler=()=>{window.history.pushState(null,"",window.location.href);};
     window.addEventListener("popstate",handler);
     return()=>window.removeEventListener("popstate",handler);
   },[]);
 
 
-  const fetchData=useCallback(async(showSpinner=false)=>{
-    if(showSpinner)setLoading(true);
+  const load=useCallback(async()=>{
+    setLoading(true);
     const fetchOne=async(table,order="id",asc=true)=>{
-      try{const {data}=await supabase.from(table).select("*").order(order,{ascending:asc});
-      return data||[];}catch(e){return [];}
+      try{const {data,error}=await supabase.from(table).select("*").order(order,{ascending:asc});
+      if(error)console.error(table,error.message);return data||[];}catch(e){console.error(table,e);return [];}
     };
+    // Tüm tabloları paralel çek - çok daha hızlı
     const [v,d,s,u,r,ml,n,ar,al]=await Promise.all([
       fetchOne("vehicles"),
       fetchOne("drivers"),
@@ -517,20 +515,16 @@ function Dashboard({user,setUser}){
     ]);
     setVehicles(v);setDrivers(d);setStaff(s);setUnits(u);setRequests(r);
     setMLogs(ml);setNotifs(n);setArizalar(ar);setAuditLogs(al);
-    if(showSpinner)setLoading(false);
+    setLoading(false);
   },[]);
 
-  // load() — işlem sonrası manuel yenileme (spinner gösterir)
-  const load=useCallback(()=>fetchData(true),[fetchData]);
+  useEffect(()=>{load();},[load]);
 
-  // İlk yükleme
-  useEffect(()=>{fetchData(true);},[fetchData]);
-
-  // Arka planda sessiz yenileme (30 saniyede bir) — açık formları kapatmaz
+  // Arka planda otomatik yenileme (30 saniyede bir)
   useEffect(()=>{
-    const iv=setInterval(()=>fetchData(false),30000);
+    const iv=setInterval(()=>{load();},30000);
     return()=>clearInterval(iv);
-  },[fetchData]);
+  },[load]);
 
   // Realtime (Paket D)
   useEffect(()=>{
@@ -554,16 +548,16 @@ function Dashboard({user,setUser}){
     setFVeh({plaka:"",marka:"",yil:"",km:""});setShowVeh(false);load();
     tst(`✅ ${fVeh.plaka} eklendi`);
   };
-  const delVeh=async(id,p)=>{if(!isAdmin)return;if(!window.confirm("Araç silinsin mi?"))return;await supabase.from("vehicles").delete().eq("id",id);await audit(user.username,"Araç Silindi",p);load();};
+  const delVeh=async(id,p)=>{if(!window.confirm("Araç silinsin mi?"))return;await supabase.from("vehicles").delete().eq("id",id);await audit(user.username,"Araç Silindi",p);load();};
 
   const addDrv=async()=>{if(!fDrv.ad)return;await supabase.from("drivers").insert({...fDrv,durum:"Müsait",arac:null});await audit(user.username,"Şoför Eklendi",fDrv.ad);setFDrv({ad:"",telefon:""});setShowDrv(false);load();};
-  const delDrv=async(id,a)=>{if(!isAdmin)return;if(!window.confirm("Şoför silinsin mi?"))return;await supabase.from("drivers").delete().eq("id",id);await audit(user.username,"Şoför Silindi",a);load();};
+  const delDrv=async(id,a)=>{if(!window.confirm("Şoför silinsin mi?"))return;await supabase.from("drivers").delete().eq("id",id);await audit(user.username,"Şoför Silindi",a);load();};
 
   const addStf=async()=>{if(!fStf.ad)return;await supabase.from("staff").insert(fStf);setFStf({ad:"",birim:"",telefon:"",unvan:""});setShowStf(false);load();};
-  const delStf=async(id,a)=>{if(!isAdmin)return;if(!window.confirm("Personel silinsin mi?"))return;await supabase.from("staff").delete().eq("id",id);await audit(user.username,"Personel Silindi",a);load();};
+  const delStf=async(id,a)=>{if(!window.confirm("Personel silinsin mi?"))return;await supabase.from("staff").delete().eq("id",id);await audit(user.username,"Personel Silindi",a);load();};
 
   const addUnit=async()=>{if(!fUnit.ad)return;await supabase.from("units").insert(fUnit);setFUnit({ad:""});setShowUnit(false);load();};
-  const delUnit=async(id,a)=>{if(!isAdmin)return;if(!window.confirm("Birim silinsin mi?"))return;await supabase.from("units").delete().eq("id",id);await audit(user.username,"Birim Silindi",a);load();};
+  const delUnit=async(id,a)=>{if(!window.confirm("Birim silinsin mi?"))return;await supabase.from("units").delete().eq("id",id);await audit(user.username,"Birim Silindi",a);load();};
 
   const addReq=async()=>{
     if(!fReq.talep||!fReq.talep_eden){tst("Talep konusu ve talep eden zorunludur","yellow");return;}
@@ -588,7 +582,7 @@ function Dashboard({user,setUser}){
     const {data:inserted,error}=await supabase.from("requests").insert(payload).select();
     if(error){
       tst("Kayıt hatası: "+error.message,"red");
-      );
+      console.error("INSERT ERROR:",JSON.stringify(error,null,2));
       return;
     }
     await audit(user.username,"Talep Oluşturuldu",fReq.talep);
@@ -601,7 +595,7 @@ function Dashboard({user,setUser}){
     setRqBirim("");setRqStaff([]);setShowReq(false);load();
     tst("✅ Talep oluşturuldu");
   };
-  const delReq=async(id,t)=>{if(!isAdmin)return;if(!window.confirm("Talep silinsin mi?"))return;await supabase.from("requests").delete().eq("id",id);await audit(user.username,"Talep Silindi",t);load();};
+  const delReq=async(id,t)=>{if(!window.confirm("Talep silinsin mi?"))return;await supabase.from("requests").delete().eq("id",id);await audit(user.username,"Talep Silindi",t);load();};
 
   const openApp=req=>{setSelReq(req);setFApp({arac:"",sofor:""});setShowApp(true);};
   const confirmApp=async()=>{
